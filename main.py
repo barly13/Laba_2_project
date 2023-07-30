@@ -36,7 +36,7 @@ class Session(BaseModel):
 
     name = Column(String, nullable=False)
     path_to_directory = Column(String, nullable=False)
-    # TODO type_session_id =
+    type_session_id = Column(Integer, ForeignKey('type_session.id', ondelete='CASCADE'))
     date = Column(TIMESTAMP, nullable=False)
 
 
@@ -51,11 +51,10 @@ class Coordinates(BaseModel):
 class Extent(BaseModel):
     __tablename__ = 'extent'
 
-    # TODO top_left =
-    # TODO bot_left =
-    # TODO top_right =
-    # TODO bot_right =
-    pass
+    top_left = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
+    bot_left = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
+    top_right = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
+    bot_right = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
 
 
 class File(BaseModel):
@@ -64,15 +63,15 @@ class File(BaseModel):
     name = Column(String, nullable=False)
     path_to_file = Column(String, nullable=False)
     file_extension = Column(String)
-    # TODO session_id =
+    session_id = Column(Integer, ForeignKey('session.id', ondelete='CASCADE'))
 
 
 class RawRLI(BaseModel):
     __tablename__ = 'raw_rli'
 
-    # TODO file_id =
-    # TODO type_source_rli_id =
-    date_receipt = Column(TIMESTAMP, nullable=False)
+    file_id = Column(Integer, ForeignKey('file.id', ondelete='CASCADE'))
+    type_source_rli_id = Column(Integer, ForeignKey('type_source_rli.id', ondelete='CASCADE'))
+    date_receiving = Column(TIMESTAMP, nullable=False)
 
 
 class RLI(BaseModel):
@@ -81,16 +80,15 @@ class RLI(BaseModel):
     time_location = Column(TIMESTAMP)
     name = Column(String, nullable=False)
     is_processing = Column(Boolean, nullable=False, default=False)
-    # TODO raw_rli_id =
+    raw_rli_id = Column(Integer, ForeignKey('raw_rli.id', ondelete='CASCADE'))
 
 
 class RasterRLI(BaseModel):
     __tablename__ = 'raster_rli'
 
-    # TODO rli_id =
-    # TODO file_id =
-    # TODO extent_id =
-    pass
+    rli_id = Column(Integer, ForeignKey('rli.id', ondelete='CASCADE'))
+    file_id = Column(Integer, ForeignKey('file.id', ondelete='CASCADE'))
+    extent_id = Column(Integer, ForeignKey('extent.id', ondelete='CASCADE'))
 
 
 class TypeBindingMethod(BaseModel):
@@ -102,19 +100,19 @@ class TypeBindingMethod(BaseModel):
 class LinkedRLI(BaseModel):
     __tablename__ = 'linked_rli'
 
-    # TODO raster_rli_id =
-    # TODO file_id =
-    # TODO extent_id =
+    raster_rli_id = Column(Integer, ForeignKey('raster_rli.id', ondelete='CASCADE'))
+    file_id = Column(Integer, ForeignKey('file.id', ondelete='CASCADE'))
+    extent_id = Column(Integer, ForeignKey('extent.id', ondelete='CASCADE'))
     binding_attempt_number = Column(Integer)
-    # TODO type_binding_method_id =
+    type_binding_method_id = Column(Integer, ForeignKey('type_binding_method.id', ondelete='CASCADE'))
 
 
 class Mark(BaseModel):
     __tablename__ = 'mark'
 
-    # TODO coordinates_id =
+    coordinates_id = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
     datetime = Column(TIMESTAMP, nullable=False)
-    # TODO session_id =
+    session_id = Column(Integer, ForeignKey('session.id', ondelete='CASCADE'))
 
 
 class RelatingObject(BaseModel):
@@ -127,10 +125,10 @@ class RelatingObject(BaseModel):
 class Object(BaseModel):
     __tablename__ = 'object'
 
-    # TODO mark_id =
+    mark_id = Column(Integer, ForeignKey('mark.id', ondelete='CASCADE'))
     name = Column(String)
     type = Column(String)
-    # TODO relating_object_id =
+    relating_object_id = Column(Integer, ForeignKey('relating_object.id', ondelete='CASCADE'))
     meta = Column(JSON)
 
 
@@ -138,8 +136,8 @@ class Target(BaseModel):
     __tablename__ = 'target'
 
     number = Column(Integer, nullable=False)
-    # TODO object_id =
-    # TODO raster_rli_id =
+    object_id = Column(Integer, ForeignKey('object.id', ondelete='CASCADE'))
+    raster_rli_id = Column(Integer, ForeignKey('raster_rli.id', ondelete='CASCADE'))
     datetime_sending = Column(TIMESTAMP)
     sppr_type_key = Column(String)
 
@@ -147,7 +145,7 @@ class Target(BaseModel):
 class Region(BaseModel):
     __tablename__ = 'region'
 
-    # TODO extent_id =
+    extent_id = Column(Integer, ForeignKey('extent.id', ondelete='CASCADE'))
     name = Column(String)
 
 
