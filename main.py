@@ -606,6 +606,8 @@ class Region(BaseModel):
                 region.name = new_name
                 session.commit()
 
+Coordinates.create_coordinates(12.23, 123.231, 3213.213)
+
 
 # Создание таблиц
 Base.metadata.create_all(bind=engine)
