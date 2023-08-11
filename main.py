@@ -13,7 +13,7 @@ session = SessionDB()
 Base = declarative_base()
 
 
-class BaseModel(Base):
+class BaseEntity(Base):
     __abstract__ = True
     id = Column(Integer, nullable=False, unique=True, primary_key=True, autoincrement=True)
 
@@ -23,20 +23,21 @@ class BaseModel(Base):
         return "<{0.__class__.__name__}(id={0.id!r})>".format(self)
 
 
-class TypeSession(BaseModel):
+class TypeSessionEntity(BaseEntity):
     __tablename__ = 'type_session'
 
     name = Column(String, nullable=False)
 
-    # Функция для создания объекта TypeSession
+    # Функция для создания объекта TypeSessionEntity
     @classmethod
     def create_type_session(cls, name):
         with cls.mutex:
             new_type_session = cls(name=name)
             session.add(new_type_session)
             session.commit()
+            return new_type_session.id
 
-    # Функция для удаления объекта TypeSession по id
+    # Функция для удаления объекта TypeSessionEntity по id
     @classmethod
     def delete_type_session(cls, type_session_id):
         with cls.mutex:
@@ -45,7 +46,7 @@ class TypeSession(BaseModel):
                 session.delete(type_session)
                 session.commit()
 
-    # Функция для изменения объекта TypeSession по id
+    # Функция для изменения объекта TypeSessionEntity по id
     @classmethod
     def update_type_session(cls, type_session_id, new_name):
         with cls.mutex:
@@ -55,20 +56,21 @@ class TypeSession(BaseModel):
                 session.commit()
 
 
-class TypeSourceRLI(BaseModel):
+class TypeSourceRLIEntity(BaseEntity):
     __tablename__ = 'type_source_rli'
 
     name = Column(String, nullable=False)
 
-    # Функция для создания объекта TypeSourceRLI
+    # Функция для создания объекта TypeSourceRLIEntity
     @classmethod
     def create_type_source_rli(cls, name):
         with cls.mutex:
             new_type_source_rli = cls(name=name)
             session.add(new_type_source_rli)
             session.commit()
+            return new_type_source_rli.id
 
-    # Функция для удаления объекта TypeSourceRLI по id
+    # Функция для удаления объекта TypeSourceRLIEntity по id
     @classmethod
     def delete_type_source_rli(cls, type_source_rli_id):
         with cls.mutex:
@@ -77,7 +79,7 @@ class TypeSourceRLI(BaseModel):
                 session.delete(type_source_rli)
                 session.commit()
 
-    # Функция для изменения объекта TypeSourceRLI по id
+    # Функция для изменения объекта TypeSourceRLIEntity по id
     @classmethod
     def update_type_source_rli(cls, type_source_rli_id, new_name):
         with cls.mutex:
@@ -87,15 +89,16 @@ class TypeSourceRLI(BaseModel):
                 session.commit()
 
 
-class Session(BaseModel):
+class SessionEntity(BaseEntity):
     __tablename__ = 'session'
 
     name = Column(String, nullable=False)
     path_to_directory = Column(String, nullable=False)
     type_session_id = Column(Integer, ForeignKey('type_session.id', ondelete='CASCADE'))
+    type_session = relationship('TypeSessionEntity')
     date = Column(TIMESTAMP, nullable=False)
 
-    # Функция для создания объекта Session
+    # Функция для создания объекта SessionEntity
     @classmethod
     def create_session(cls, name, path_to_directory, type_session_id):
         with cls.mutex:
@@ -103,8 +106,9 @@ class Session(BaseModel):
                               type_session_id=type_session_id, date=datetime.now())
             session.add(new_session)
             session.commit()
+            return new_session.id
 
-    # Функция для удаления объекта Session по id
+    # Функция для удаления объекта SessionEntity по id
     @classmethod
     def delete_session(cls, session_id):
         with cls.mutex:
@@ -113,7 +117,7 @@ class Session(BaseModel):
                 session.delete(session_obj)
                 session.commit()
 
-    # Функция для изменения объекта Session по id
+    # Функция для изменения объекта SessionEntity по id
     @classmethod
     def update_session(cls, session_id, new_name, new_path_to_directory, new_type_session_id):
         with cls.mutex:
@@ -132,22 +136,23 @@ class Session(BaseModel):
             return session.query(cls).all()
 
 
-class Coordinates(BaseModel):
+class CoordinatesEntity(BaseEntity):
     __tablename__ = 'coordinates'
 
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     altitude = Column(Float, default=0)
 
-    # Функция для создания объекта Coordinates
+    # Функция для создания объекта CoordinatesEntity
     @classmethod
     def create_coordinates(cls, latitude, longitude, altitude):
         with cls.mutex:
             new_coordinates = cls(latitude=latitude, longitude=longitude, altitude=altitude)
             session.add(new_coordinates)
             session.commit()
+            return new_coordinates.id
 
-    # Функция для удаления объекта Coordinates по id
+    # Функция для удаления объекта CoordinatesEntity по id
     @classmethod
     def delete_coordinates(cls, coordinates_id):
         with cls.mutex:
@@ -156,7 +161,7 @@ class Coordinates(BaseModel):
                 session.delete(coordinates)
                 session.commit()
 
-    # Функция для изменения объекта Coordinates по id
+    # Функция для изменения объекта CoordinatesEntity по id
     @classmethod
     def update_coordinates(cls, coordinates_id, new_latitude, new_longitude, new_altitude):
         with cls.mutex:
@@ -168,23 +173,28 @@ class Coordinates(BaseModel):
                 session.commit()
 
 
-class Extent(BaseModel):
+class ExtentEntity(BaseEntity):
     __tablename__ = 'extent'
 
-    top_left = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
-    bot_left = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
-    top_right = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
-    bot_right = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
+    top_left_id = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
+    top_left = relationship('CoordinatesEntity', foreign_keys=[top_left_id])
+    bot_left_id = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
+    bot_left = relationship('CoordinatesEntity', foreign_keys=[bot_left_id])
+    top_right_id = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
+    top_right = relationship('CoordinatesEntity', foreign_keys=[top_right_id])
+    bot_right_id = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
+    bot_right = relationship('CoordinatesEntity', foreign_keys=[bot_right_id])
 
-    # Функция для создания объекта Extent
+    # Функция для создания объекта ExtentEntity
     @classmethod
     def create_extent(cls, top_left, bot_left, top_right, bot_right):
         with cls.mutex:
-            new_extent = cls(top_left=top_left, bot_left=bot_left, top_right=top_right, bot_right=bot_right)
+            new_extent = cls(top_left_id=top_left, bot_left_id=bot_left, top_right_id=top_right, bot_right_id=bot_right)
             session.add(new_extent)
             session.commit()
+            return new_extent.id
 
-    # Функция для удаления объекта Extent по id
+    # Функция для удаления объекта ExtentEntity по id
     @classmethod
     def delete_extent(cls, extent_id):
         with cls.mutex:
@@ -193,36 +203,38 @@ class Extent(BaseModel):
                 session.delete(extent)
                 session.commit()
 
-    # Функция для изменения объекта Extent по id
+    # Функция для изменения объекта ExtentEntity по id
     @classmethod
     def update_extent(cls, extent_id, new_top_left, new_bot_left, new_top_right, new_bot_right):
         with cls.mutex:
             extent = session.query(cls).get(extent_id)
             if extent:
-                extent.top_left = new_top_left
-                extent.bot_left = new_bot_left
-                extent.top_right = new_top_right
-                extent.bot_right = new_bot_right
+                extent.top_left_id = new_top_left
+                extent.bot_left_id = new_bot_left
+                extent.top_right_id = new_top_right
+                extent.bot_right_id = new_bot_right
                 session.commit()
 
 
-class File(BaseModel):
+class FileEntity(BaseEntity):
     __tablename__ = 'file'
 
     name = Column(String, nullable=False)
     path_to_file = Column(String, nullable=False)
     file_extension = Column(String)
     session_id = Column(Integer, ForeignKey('session.id', ondelete='CASCADE'))
+    session = relationship('SessionEntity')
 
-    # Функция для создания объекта File
+    # Функция для создания объекта FileEntity
     @classmethod
     def create_file(cls, name, path_to_file, file_extension, session_id):
         with cls.mutex:
             new_file = cls(name=name, path_to_file=path_to_file, file_extension=file_extension, session_id=session_id)
             session.add(new_file)
             session.commit()
+            return new_file.id
 
-    # Функция для удаления объекта File по id
+    # Функция для удаления объекта FileEntity по id
     @classmethod
     def delete_file(cls, file_id):
         with cls.mutex:
@@ -231,7 +243,7 @@ class File(BaseModel):
                 session.delete(file)
                 session.commit()
 
-    # Функция для изменения объекта File по id
+    # Функция для изменения объекта FileEntity по id
     @classmethod
     def update_file(cls, file_id, new_name, new_path_to_file, new_file_extension, new_session_id):
         with cls.mutex:
@@ -244,22 +256,25 @@ class File(BaseModel):
                 session.commit()
 
 
-class RawRLI(BaseModel):
+class RawRLIEntity(BaseEntity):
     __tablename__ = 'raw_rli'
 
     file_id = Column(Integer, ForeignKey('file.id', ondelete='CASCADE'))
+    file = relationship('FileEntity')
     type_source_rli_id = Column(Integer, ForeignKey('type_source_rli.id', ondelete='CASCADE'))
+    type_source_rli = relationship('TypeSourceRLIEntity')
     date_receiving = Column(TIMESTAMP, nullable=False)
 
-    # Функция для создания объекта RawRLI
+    # Функция для создания объекта RawRLIEntity
     @classmethod
     def create_raw_rli(cls, file_id, type_source_rli_id):
         with cls.mutex:
             new_raw_rli = cls(file_id=file_id, type_source_rli_id=type_source_rli_id, date_receiving=datetime.now())
             session.add(new_raw_rli)
             session.commit()
+            return new_raw_rli.id
 
-    # Функция для удаления объекта RawRLI по id
+    # Функция для удаления объекта RawRLIEntity по id
     @classmethod
     def delete_raw_rli(cls, raw_rli_id):
         with cls.mutex:
@@ -268,7 +283,7 @@ class RawRLI(BaseModel):
                 session.delete(raw_rli)
                 session.commit()
 
-    # Функция для изменения объекта RawRLI по id
+    # Функция для изменения объекта RawRLIEntity по id
     @classmethod
     def update_raw_rli(cls, raw_rli_id, new_file_id, new_type_source_rli_id):
         with cls.mutex:
@@ -280,23 +295,25 @@ class RawRLI(BaseModel):
                 session.commit()
 
 
-class RLI(BaseModel):
+class RLIEntity(BaseEntity):
     __tablename__ = 'rli'
 
     time_location = Column(TIMESTAMP)
     name = Column(String, nullable=False)
     is_processing = Column(Boolean, nullable=False, default=False)
     raw_rli_id = Column(Integer, ForeignKey('raw_rli.id', ondelete='CASCADE'))
+    raw_rli = relationship('RawRLIEntity')
 
-    # Функция для создания объекта RLI
+    # Функция для создания объекта RLIEntity
     @classmethod
     def create_rli(cls, name, is_processing, raw_rli_id):
         with cls.mutex:
             new_rli = cls(time_location=datetime.now(), name=name, is_processing=is_processing, raw_rli_id=raw_rli_id)
             session.add(new_rli)
             session.commit()
+            return new_rli.id
 
-    # Функция для удаления объекта RLI по id
+    # Функция для удаления объекта RLIEntity по id
     @classmethod
     def delete_rli(cls, rli_id):
         with cls.mutex:
@@ -305,7 +322,7 @@ class RLI(BaseModel):
                 session.delete(rli)
                 session.commit()
 
-    # Функция для изменения объекта RLI по id
+    # Функция для изменения объекта RLIEntity по id
     @classmethod
     def update_rli(cls, rli_id, new_name, new_is_processing, new_raw_rli_id):
         with cls.mutex:
@@ -322,33 +339,37 @@ class RLI(BaseModel):
     def get_rli_by_session_id(cls, session_id):
         with cls.mutex:
             # Выбираем id файлов с соответствующим session_id
-            ids_of_files_with_session_id = list(map(lambda x: x.id, session.query(File).
+            ids_of_files_with_session_id = list(map(lambda x: x.id, session.query(FileEntity).
                                                     filter_by(session_id=session_id).all()))
 
             # Выбираем id RawRLIs по соответсвующим id файлов
-            raw_rli_ids_with_session_id = list(map(lambda x: x.id, session.query(RawRLI).
-                                                   filter(RawRLI.file_id.in_(ids_of_files_with_session_id)).all()))
+            raw_rli_ids_with_session_id = list(map(lambda x: x.id, session.query(RawRLIEntity).
+                                                   filter(RawRLIEntity.file_id.in_(ids_of_files_with_session_id)).all()))
 
             # Возваращаем соответствующие RLIs по id RawRLIs
             return session.query(cls).filter(cls.raw_rli_id.in_(raw_rli_ids_with_session_id)).all()
 
 
-class RasterRLI(BaseModel):
+class RasterRLIEntity(BaseEntity):
     __tablename__ = 'raster_rli'
 
     rli_id = Column(Integer, ForeignKey('rli.id', ondelete='CASCADE'))
+    rli = relationship('RLIEntity')
     file_id = Column(Integer, ForeignKey('file.id', ondelete='CASCADE'))
+    file = relationship('FileEntity')
     extent_id = Column(Integer, ForeignKey('extent.id', ondelete='CASCADE'))
+    extent = relationship('ExtentEntity')
 
-    # Функция создания объекта RasterRLI
+    # Функция создания объекта RasterRLIEntity
     @classmethod
     def create_raster_rli(cls, rli_id, file_id, extent_id):
         with cls.mutex:
             new_raster_rli = cls(rli_id=rli_id, file_id=file_id, extent_id=extent_id)
             session.add(new_raster_rli)
             session.commit()
+            return new_raster_rli.id
 
-    # Функция для удаления объекта RasterRLI по id
+    # Функция для удаления объекта RasterRLIEntity по id
     @classmethod
     def delete_raster_rli(cls, raster_rli_id):
         with cls.mutex:
@@ -357,7 +378,7 @@ class RasterRLI(BaseModel):
                 session.delete(raster_rli)
                 session.commit()
 
-    # Функция для изменения объекта RasterRLI по id
+    # Функция для изменения объекта RasterRLIEntity по id
     @classmethod
     def update_raster_rli(cls, raster_rli_id, new_rli_id, new_file_id, new_extent_id):
         with cls.mutex:
@@ -369,20 +390,21 @@ class RasterRLI(BaseModel):
                 session.commit()
 
 
-class TypeBindingMethod(BaseModel):
+class TypeBindingMethodEntity(BaseEntity):
     __tablename__ = 'type_binding_method'
 
     name = Column(String, nullable=False)
 
-    # Функция для создания объекта TypeBindingMethod
+    # Функция для создания объекта TypeBindingMethodEntity
     @classmethod
     def create_type_binding_method(cls, name):
         with cls.mutex:
             new_type_binding_method = cls(name=name)
             session.add(new_type_binding_method)
             session.commit()
+            return new_type_binding_method.id
 
-    # Функция для удаления объекта TypeBindingMethod по id
+    # Функция для удаления объекта TypeBindingMethodEntity по id
     @classmethod
     def delete_type_binding_method(cls, type_binding_method_id):
         with cls.mutex:
@@ -391,7 +413,7 @@ class TypeBindingMethod(BaseModel):
                 session.delete(type_binding_method)
                 session.commit()
 
-    # Функция для изменения объекта TypeBindingMethod по id
+    # Функция для изменения объекта TypeBindingMethodEntity по id
     @classmethod
     def update_type_binding_method(cls, type_binding_method_id, new_name):
         with cls.mutex:
@@ -401,16 +423,20 @@ class TypeBindingMethod(BaseModel):
                 session.commit()
 
 
-class LinkedRLI(BaseModel):
+class LinkedRLIEntity(BaseEntity):
     __tablename__ = 'linked_rli'
 
     raster_rli_id = Column(Integer, ForeignKey('raster_rli.id', ondelete='CASCADE'))
+    raster_rli = relationship('RasterRLIEntity')
     file_id = Column(Integer, ForeignKey('file.id', ondelete='CASCADE'))
+    file = relationship('FileEntity')
     extent_id = Column(Integer, ForeignKey('extent.id', ondelete='CASCADE'))
+    extent = relationship('ExtentEntity')
     binding_attempt_number = Column(Integer)
     type_binding_method_id = Column(Integer, ForeignKey('type_binding_method.id', ondelete='CASCADE'))
+    type_binding_method = relationship('TypeBindingMethodEntity')
 
-    # Функция для создания объекта LinkedRLI
+    # Функция для создания объекта LinkedRLIEntity
     @classmethod
     def create_linked_rli(cls, raster_rli_id, file_id, extent_id, binding_attempt_number, type_binding_method_id):
         with cls.mutex:
@@ -419,8 +445,9 @@ class LinkedRLI(BaseModel):
                                  type_binding_method_id=type_binding_method_id)
             session.add(new_linked_rli)
             session.commit()
+            return new_linked_rli.id
 
-    # Функция для удаления объекта LinkedRLI по id
+    # Функция для удаления объекта LinkedRLIEntity по id
     @classmethod
     def delete_linked_rli(cls, linked_rli_id):
         with cls.mutex:
@@ -429,7 +456,7 @@ class LinkedRLI(BaseModel):
                 session.delete(linked_rli)
                 session.commit()
 
-    # Функция для изменения объекта LinkedRLI по id
+    # Функция для изменения объекта LinkedRLIEntity по id
     @classmethod
     def update_linked_rli(cls, linked_rli_id, new_raster_rli_id, new_file_id, new_extent_id,
                           new_binding_attempt_number, new_type_binding_method_id):
@@ -448,29 +475,32 @@ class LinkedRLI(BaseModel):
     def get_linked_rli_by_session_id(cls, session_id):
         with cls.mutex:
             # Выбираем id файлов с соответствующим session_id
-            ids_of_files_with_session_id = list(map(lambda x: x.id, session.query(File).
+            ids_of_files_with_session_id = list(map(lambda x: x.id, session.query(FileEntity).
                                                     filter_by(session_id=session_id).all()))
 
             # Возвращаем соответствующие LinkedRLIs по file_id
             return session.query(cls).filter(cls.file_id.in_(ids_of_files_with_session_id)).all()
 
 
-class Mark(BaseModel):
+class MarkEntity(BaseEntity):
     __tablename__ = 'mark'
 
     coordinates_id = Column(Integer, ForeignKey('coordinates.id', ondelete='CASCADE'))
+    coordinates = relationship('CoordinatesEntity')
     datetime = Column(TIMESTAMP, nullable=False)
     session_id = Column(Integer, ForeignKey('session.id', ondelete='CASCADE'))
+    session = relationship('SessionEntity')
 
-    # Функция для создания объекта Mark
+    # Функция для создания объекта MarkEntity
     @classmethod
     def create_mark(cls, coordinates_id, session_id):
         with cls.mutex:
             new_mark = cls(coordinates_id=coordinates_id, datetime=datetime.now(), session_id=session_id)
             session.add(new_mark)
             session.commit()
+            return new_mark.id
 
-    # Функция для удаления объекта Mark по id
+    # Функция для удаления объекта MarkEntity по id
     @classmethod
     def delete_mark(cls, mark_id):
         with cls.mutex:
@@ -479,7 +509,7 @@ class Mark(BaseModel):
                 session.delete(mark)
                 session.commit()
 
-    # Функция для изменения объекта Mark по id
+    # Функция для изменения объекта MarkEntity по id
     @classmethod
     def update_mark(cls, mark_id, new_coordinates_id, new_session_id):
         with cls.mutex:
@@ -502,21 +532,22 @@ class Mark(BaseModel):
         return session.query(cls).filter(cls.session_id == session_id).all()
 
 
-class RelatingObject(BaseModel):
+class RelatingObjectEntity(BaseEntity):
     __tablename__ = 'relating_object'
 
     type_relating = Column(Integer, nullable=False)
     name = Column(String, nullable=False)
 
-    # Функция для создания объекта RelatingObject
+    # Функция для создания объекта RelatingObjectEntity
     @classmethod
     def create_relating_object(cls, type_relating, name):
         with cls.mutex:
             new_relating_object = cls(type_relating=type_relating, name=name)
             session.add(new_relating_object)
             session.commit()
+            return new_relating_object.id
 
-    # Функция для удаления объекта RelatingObject по id
+    # Функция для удаления объекта RelatingObjectEntity по id
     @classmethod
     def delete_relating_object(cls, relating_object_id):
         with cls.mutex:
@@ -525,7 +556,7 @@ class RelatingObject(BaseModel):
                 session.delete(relating_object)
                 session.commit()
 
-    # Функция для изменения объекта RelatingObject по id
+    # Функция для изменения объекта RelatingObjectEntity по id
     @classmethod
     def update_relating_object(cls, relating_object_id, new_type_relating, new_name):
         with cls.mutex:
@@ -536,16 +567,18 @@ class RelatingObject(BaseModel):
                 session.commit()
 
 
-class Object(BaseModel):
+class ObjectEntity(BaseEntity):
     __tablename__ = 'object'
 
     mark_id = Column(Integer, ForeignKey('mark.id', ondelete='CASCADE'))
+    mark = relationship('MarkEntity')
     name = Column(String)
     type = Column(String)
     relating_object_id = Column(Integer, ForeignKey('relating_object.id', ondelete='CASCADE'))
+    relating_object = relationship('RelatingObjectEntity')
     meta = Column(JSON)
 
-    # Функция для создания объекта Object
+    # Функция для создания объекта ObjectEntity
     @classmethod
     def create_object(cls, mark_id, name, object_type, relating_object_id, meta):
         with cls.mutex:
@@ -553,8 +586,9 @@ class Object(BaseModel):
                              relating_object_id=relating_object_id, meta=meta)
             session.add(new_object)
             session.commit()
+            return new_object.id
 
-    # Функция для удаления объекта Object по id
+    # Функция для удаления объекта ObjectEntity по id
     @classmethod
     def delete_object(cls, object_id):
         with cls.mutex:
@@ -563,7 +597,7 @@ class Object(BaseModel):
                 session.delete(object_)
                 session.commit()
 
-    # Функция для изменения объекта Object по id
+    # Функция для изменения объекта ObjectEntity по id
     @classmethod
     def update_object(cls, object_id, new_mark_id, new_name, new_object_type, new_relating_object_id, new_meta):
         with cls.mutex:
@@ -577,16 +611,18 @@ class Object(BaseModel):
                 session.commit()
 
 
-class Target(BaseModel):
+class TargetEntity(BaseEntity):
     __tablename__ = 'target'
 
     number = Column(Integer, nullable=False)
     object_id = Column(Integer, ForeignKey('object.id', ondelete='CASCADE'))
+    object = relationship('ObjectEntity')
     raster_rli_id = Column(Integer, ForeignKey('raster_rli.id', ondelete='CASCADE'))
+    raster_rli = relationship('RasterRLIEntity')
     datetime_sending = Column(TIMESTAMP)
     sppr_type_key = Column(String)
 
-    # Функция для создания объекта Target
+    # Функция для создания объекта TargetEntity
     @classmethod
     def create_target(cls, number, object_id, raster_rli_id, sppr_type_key):
         with cls.mutex:
@@ -594,8 +630,9 @@ class Target(BaseModel):
                              datetime_sending=datetime.now(), sppr_type_key=sppr_type_key)
             session.add(new_target)
             session.commit()
+            return new_target.id
 
-    # Функция для удаления объекта Target по id
+    # Функция для удаления объекта TargetEntity по id
     @classmethod
     def delete_target(cls, target_id):
         with cls.mutex:
@@ -604,7 +641,7 @@ class Target(BaseModel):
                 session.delete(target)
                 session.commit()
 
-    # Функция для изменения объекта Target по id
+    # Функция для изменения объекта TargetEntity по id
     @classmethod
     def update_target(cls, target_id, new_number, new_object_id, new_raster_rli_id, new_sppr_type_key):
         with cls.mutex:
@@ -622,33 +659,35 @@ class Target(BaseModel):
     def get_targets_by_session_id(cls, session_id):
         with cls.mutex:
             # Выбираем id файлов с соответствующим session_id
-            ids_of_files_with_session_id = list(map(lambda x: x.id, session.query(File).
+            ids_of_files_with_session_id = list(map(lambda x: x.id, session.query(FileEntity).
                                                     filter_by(session_id=session_id).all()))
 
             # Выбираем id RasterRLIs по соответсвующим id файлов
-            raster_rli_ids_with_session_id = list(map(lambda x: x.id, session.query(RasterRLI).
-                                                      filter(RasterRLI.file_id.in_(ids_of_files_with_session_id)).
+            raster_rli_ids_with_session_id = list(map(lambda x: x.id, session.query(RasterRLIEntity).
+                                                      filter(RasterRLIEntity.file_id.in_(ids_of_files_with_session_id)).
                                                       all()))
 
             # Возваращаем соответствующие Targets по id RasterRLIs
             return session.query(cls).filter(cls.raster_rli_id.in_(raster_rli_ids_with_session_id)).all()
 
 
-class Region(BaseModel):
+class RegionEntity(BaseEntity):
     __tablename__ = 'region'
 
     extent_id = Column(Integer, ForeignKey('extent.id', ondelete='CASCADE'))
+    extent = relationship('ExtentEntity')
     name = Column(String)
 
-    # Функция для создания объекта Region
+    # Функция для создания объекта RegionEntity
     @classmethod
     def create_region(cls, extent_id, name):
         with cls.mutex:
             new_region = cls(extent_id=extent_id, name=name)
             session.add(new_region)
             session.commit()
+            return new_region.id
 
-    # Функция для удаления объекта Region по id
+    # Функция для удаления объекта RegionEntity по id
     @classmethod
     def delete_region(cls, region_id):
         with cls.mutex:
@@ -657,7 +696,7 @@ class Region(BaseModel):
                 session.delete(region_)
                 session.commit()
 
-    # Функция для изменения объекта Region по id
+    # Функция для изменения объекта RegionEntity по id
     @classmethod
     def update_region(cls, region_id, new_extent_id, new_name):
         with cls.mutex:
@@ -681,19 +720,19 @@ Base.metadata.create_all(bind=engine)
 
 # TypeSessions
 
-TypeSession.create_type_session("Type 1")
-print(session.query(TypeSession).get(1).name)
-TypeSession.create_type_session("Type 2")
-print(session.query(TypeSession).get(2).name)
-TypeSession.update_type_session(1, "New Session")
-TypeSession.update_type_session(2, "New Session 2")
-print(session.query(TypeSession).get(1).name)
-print(session.query(TypeSession).get(2).name)
-# TypeSession.delete_type_session(1)
-# TypeSession.delete_type_session(2)
+TypeSessionEntity.create_type_session("Type 1")
+print(session.query(TypeSessionEntity).get(1).name)
+TypeSessionEntity.create_type_session("Type 2")
+print(session.query(TypeSessionEntity).get(2).name)
+TypeSessionEntity.update_type_session(1, "New SessionEntity")
+TypeSessionEntity.update_type_session(2, "New SessionEntity 2")
+print(session.query(TypeSessionEntity).get(1).name)
+print(session.query(TypeSessionEntity).get(2).name)
+# TypeSessionEntity.delete_type_session(1)
+# TypeSessionEntity.delete_type_session(2)
 # try:
-#     print(session.query(TypeSession).get(1).name)
-#     print(session.query(TypeSession).get(2).name)
+#     print(session.query(TypeSessionEntity).get(1).name)
+#     print(session.query(TypeSessionEntity).get(2).name)
 # except:
 #     print("No such TypeSessions")
 
@@ -701,285 +740,287 @@ print()
 
 # TypeSourceRLIs
 
-TypeSourceRLI.create_type_source_rli("TypeSourceRLI 1")
-print(session.query(TypeSourceRLI).get(1).name)
-TypeSourceRLI.create_type_source_rli("TypeSourceRLI 2")
-print(session.query(TypeSourceRLI).get(2).name)
-TypeSourceRLI.update_type_source_rli(1, "New TypeSourceRLI")
-TypeSourceRLI.update_type_source_rli(2, "New TypeSourceRLI 2")
-print(session.query(TypeSourceRLI).get(1).name)
-print(session.query(TypeSourceRLI).get(2).name)
-# TypeSourceRLI.delete_type_source_rli(1)
-# TypeSourceRLI.delete_type_source_rli(2)
+TypeSourceRLIEntity.create_type_source_rli("TypeSourceRLIEntity 1")
+print(session.query(TypeSourceRLIEntity).get(1).name)
+TypeSourceRLIEntity.create_type_source_rli("TypeSourceRLIEntity 2")
+print(session.query(TypeSourceRLIEntity).get(2).name)
+TypeSourceRLIEntity.update_type_source_rli(1, "New TypeSourceRLIEntity")
+TypeSourceRLIEntity.update_type_source_rli(2, "New TypeSourceRLIEntity 2")
+print(session.query(TypeSourceRLIEntity).get(1).name)
+print(session.query(TypeSourceRLIEntity).get(2).name)
+# TypeSourceRLIEntity.delete_type_source_rli(1)
+# TypeSourceRLIEntity.delete_type_source_rli(2)
 # try:
-#     print(session.query(TypeSourceRLI).get(1).name)
-#     print(session.query(TypeSourceRLI).get(2).name)
+#     print(session.query(TypeSourceRLIEntity).get(1).name)
+#     print(session.query(TypeSourceRLIEntity).get(2).name)
 # except:
 #     print("No such TypeSourceRLIs")
 
 print()
 
-# Session
+# SessionEntity
 
-Session.create_session("Session 1", "/some/some/session_1", session.query(TypeSession).get(1).id)
-print(session.query(Session).get(1).name, session.query(Session).get(1).path_to_directory,
-      session.query(Session).get(1).type_session_id, session.query(Session).get(1).date)
-Session.create_session("Session 2", "/some/some/session_2", session.query(TypeSession).get(2).id)
-print(session.query(Session).get(2).name, session.query(Session).get(2).path_to_directory,
-      session.query(Session).get(2).type_session_id, session.query(Session).get(2).date)
-Session.update_session(1, "Update Session 1", "/some/some/update_session_1", session.query(TypeSession).get(2).id)
-Session.update_session(2, "Update Session 2", "/some/some/update_session_2", session.query(TypeSession).get(1).id)
-print(session.query(Session).get(1).name, session.query(Session).get(1).path_to_directory,
-      session.query(Session).get(1).type_session_id, session.query(Session).get(1).date)
-print(session.query(Session).get(2).name, session.query(Session).get(2).path_to_directory,
-      session.query(Session).get(2).type_session_id, session.query(Session).get(2).date)
-print(Session.get_all_sessions())
-# Session.delete_session(1)
-# Session.delete_session(2)
+SessionEntity.create_session("SessionEntity 1", "/some/some/session_1", session.query(TypeSessionEntity).get(1).id)
+
+
+print(session.query(SessionEntity).get(1).name, session.query(SessionEntity).get(1).path_to_directory,
+      session.query(SessionEntity).get(1).type_session_id, session.query(SessionEntity).get(1).date)
+SessionEntity.create_session("SessionEntity 2", "/some/some/session_2", session.query(TypeSessionEntity).get(2).id)
+print(session.query(SessionEntity).get(2).name, session.query(SessionEntity).get(2).path_to_directory,
+      session.query(SessionEntity).get(2).type_session_id, session.query(SessionEntity).get(2).date)
+SessionEntity.update_session(1, "Update SessionEntity 1", "/some/some/update_session_1", session.query(TypeSessionEntity).get(2).id)
+SessionEntity.update_session(2, "Update SessionEntity 2", "/some/some/update_session_2", session.query(TypeSessionEntity).get(1).id)
+print(session.query(SessionEntity).get(1).name, session.query(SessionEntity).get(1).path_to_directory,
+      session.query(SessionEntity).get(1).type_session_id, session.query(SessionEntity).get(1).date)
+print(session.query(SessionEntity).get(2).name, session.query(SessionEntity).get(2).path_to_directory,
+      session.query(SessionEntity).get(2).type_session_id, session.query(SessionEntity).get(2).date)
+print(SessionEntity.get_all_sessions())
+# SessionEntity.delete_session(1)
+# SessionEntity.delete_session(2)
 # try:
-#     print(session.query(Session).get(1).name)
-#     print(session.query(Session).get(2).name)
+#     print(session.query(SessionEntity).get(1).name)
+#     print(session.query(SessionEntity).get(2).name)
 # except:
 #     print("No such Sessions")
 
-# Coordinates
+# CoordinatesEntity
 
-Coordinates.create_coordinates(56.24112, 54.12331, 45.4214)
-Coordinates.create_coordinates(46.24212, 44.1231, 47.4214)
-print(session.query(Coordinates).get(1).latitude)
-print(session.query(Coordinates).get(2).altitude)
-Coordinates.update_coordinates(1, 24.5225, 34.252, 56.1242)
-Coordinates.update_coordinates(2, 42.5225, 33.252, 76.1242)
-print(session.query(Coordinates).get(1).longitude)
-print(session.query(Coordinates).get(2).latitude)
-# Coordinates.delete_coordinates(1)
-# Coordinates.delete_coordinates(2)
+CoordinatesEntity.create_coordinates(56.24112, 54.12331, 45.4214)
+CoordinatesEntity.create_coordinates(46.24212, 44.1231, 47.4214)
+print(session.query(CoordinatesEntity).get(1).latitude)
+print(session.query(CoordinatesEntity).get(2).altitude)
+CoordinatesEntity.update_coordinates(1, 24.5225, 34.252, 56.1242)
+CoordinatesEntity.update_coordinates(2, 42.5225, 33.252, 76.1242)
+print(session.query(CoordinatesEntity).get(1).longitude)
+print(session.query(CoordinatesEntity).get(2).latitude)
+# CoordinatesEntity.delete_coordinates(1)
+# CoordinatesEntity.delete_coordinates(2)
 # try:
-#     print(session.query(Coordinates).get(1).latitude)
-#     print(session.query(Coordinates).get(2).latitude)
+#     print(session.query(CoordinatesEntity).get(1).latitude)
+#     print(session.query(CoordinatesEntity).get(2).latitude)
 # except:
-#     print("No such Coordinates")
+#     print("No such CoordinatesEntity")
 
-# Extent
+# ExtentEntity
 
-Extent.create_extent(1, 1, 2, 2)
-Extent.create_extent(2, 2, 1, 1)
-print(session.query(Coordinates).get(session.query(Extent).get(1).top_left))
-print(session.query(Coordinates).get(session.query(Extent).get(2).bot_left))
-Extent.update_extent(1, 2, 2, 2, 2)
-Extent.update_extent(2, 1, 1, 1, 1)
-print(session.query(Coordinates).get(session.query(Extent).get(1).top_left))
-print(session.query(Coordinates).get(session.query(Extent).get(2).bot_left))
-# Extent.delete_extent(1)
-# Extent.delete_extent(2)
+ExtentEntity.create_extent(1, 1, 2, 2)
+ExtentEntity.create_extent(2, 2, 1, 1)
+print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(1).top_left_id))
+print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(2).bot_left_id))
+ExtentEntity.update_extent(1, 2, 2, 2, 2)
+ExtentEntity.update_extent(2, 1, 1, 1, 1)
+print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(1).top_left_id))
+print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(2).bot_left_id))
+# ExtentEntity.delete_extent(1)
+# ExtentEntity.delete_extent(2)
 # try:
-#     print(session.query(Extent).get(1).top_left)
-#     print(session.query(Extent).get(2).top_left)
+#     print(session.query(ExtentEntity).get(1).top_left_id)
+#     print(session.query(ExtentEntity).get(2).top_left_id)
 # except:
 #     print("No such Extents")
 
 print()
 
-# File
+# FileEntity
 
-File.create_file("File 1", "path_to_file", "file_extension", 1)
-File.create_file("File 2", "path_to_file", "file_extension", 2)
-print(session.query(File).get(1).name, session.query(File).get(1).path_to_file)
-print(session.query(File).get(2).session_id)
-File.update_file(1, "New File 1", "new_path_to_file", "new_file_extension", 2)
-File.update_file(2, "New File 2", "new_path_to_file", "new_file_extension", 1)
-print(session.query(File).get(1).name, session.query(File).get(1).path_to_file)
-print(session.query(File).get(2).session_id)
-# File.delete_file(1)
-# File.delete_file(2)
+FileEntity.create_file("FileEntity 1", "path_to_file", "file_extension", 1)
+FileEntity.create_file("FileEntity 2", "path_to_file", "file_extension", 2)
+print(session.query(FileEntity).get(1).name, session.query(FileEntity).get(1).path_to_file)
+print(session.query(FileEntity).get(2).session_id)
+FileEntity.update_file(1, "New FileEntity 1", "new_path_to_file", "new_file_extension", 2)
+FileEntity.update_file(2, "New FileEntity 2", "new_path_to_file", "new_file_extension", 1)
+print(session.query(FileEntity).get(1).name, session.query(FileEntity).get(1).path_to_file)
+print(session.query(FileEntity).get(2).session_id)
+# FileEntity.delete_file(1)
+# FileEntity.delete_file(2)
 # try:
-#     print(session.query(File).get(1).name, session.query(File).get(1).path_to_file)
-#     print(session.query(File).get(2).session_id)
+#     print(session.query(FileEntity).get(1).name, session.query(FileEntity).get(1).path_to_file)
+#     print(session.query(FileEntity).get(2).session_id)
 # except:
 #     print("No such files")
 
 print()
 
-# RawRLI
+# RawRLIEntity
 
-RawRLI.create_raw_rli(1, 1)
-RawRLI.create_raw_rli(2, 2)
-print(session.query(RawRLI).get(1).type_source_rli_id)
-print(session.query(RawRLI).get(2).file_id, session.query(RawRLI).get(2).date_receiving)
-RawRLI.update_raw_rli(1, 2, 2)
-RawRLI.update_raw_rli(2, 1, 1)
-print(session.query(RawRLI).get(1).type_source_rli_id)
-print(session.query(RawRLI).get(2).file_id)
-# RawRLI.delete_raw_rli(1)
-# RawRLI.delete_raw_rli(2)
+RawRLIEntity.create_raw_rli(1, 1)
+RawRLIEntity.create_raw_rli(2, 2)
+print(session.query(RawRLIEntity).get(1).type_source_rli_id)
+print(session.query(RawRLIEntity).get(2).file_id, session.query(RawRLIEntity).get(2).date_receiving)
+RawRLIEntity.update_raw_rli(1, 2, 2)
+RawRLIEntity.update_raw_rli(2, 1, 1)
+print(session.query(RawRLIEntity).get(1).type_source_rli_id)
+print(session.query(RawRLIEntity).get(2).file_id)
+# RawRLIEntity.delete_raw_rli(1)
+# RawRLIEntity.delete_raw_rli(2)
 # try:
-#     print(session.query(RawRLI).get(1).type_source_rli_id)
-#     print(session.query(RawRLI).get(2).file_id)
+#     print(session.query(RawRLIEntity).get(1).type_source_rli_id)
+#     print(session.query(RawRLIEntity).get(2).file_id)
 # except:
 #     print("No such RLIs")
 
 print()
 
-# RLI
+# RLIEntity
 
-RLI.create_rli("RLI 1", True, 1)
-RLI.create_rli("RLI 2", False, 2)
-print(session.query(RLI).get(1).time_location, session.query(RLI).get(1).name,
-      session.query(RLI).get(1).is_processing, session.query(RLI).get(1).raw_rli_id)
-print(session.query(RLI).get(2).time_location, session.query(RLI).get(2).name,
-      session.query(RLI).get(2).is_processing, session.query(RLI).get(2).raw_rli_id)
-RLI.update_rli(2, " New RLI 2", True, 2)
-print(session.query(RLI).get(2).time_location, session.query(RLI).get(2).name,
-      session.query(RLI).get(2).is_processing, session.query(RLI).get(2).raw_rli_id)
+RLIEntity.create_rli("RLIEntity 1", True, 1)
+RLIEntity.create_rli("RLIEntity 2", False, 2)
+print(session.query(RLIEntity).get(1).time_location, session.query(RLIEntity).get(1).name,
+      session.query(RLIEntity).get(1).is_processing, session.query(RLIEntity).get(1).raw_rli_id)
+print(session.query(RLIEntity).get(2).time_location, session.query(RLIEntity).get(2).name,
+      session.query(RLIEntity).get(2).is_processing, session.query(RLIEntity).get(2).raw_rli_id)
+RLIEntity.update_rli(2, " New RLIEntity 2", True, 2)
+print(session.query(RLIEntity).get(2).time_location, session.query(RLIEntity).get(2).name,
+      session.query(RLIEntity).get(2).is_processing, session.query(RLIEntity).get(2).raw_rli_id)
 
-print(RLI.get_rli_by_session_id(1))
+print(RLIEntity.get_rli_by_session_id(1))
 
 print()
 
-# RasterRLI
+# RasterRLIEntity
 
-RasterRLI.create_raster_rli(1, 1, 1)
-RasterRLI.create_raster_rli(2, 2, 2)
-print(session.query(RasterRLI).get(1).extent_id)
-RasterRLI.update_raster_rli(1, 2, 2, 2)
-print(session.query(RasterRLI).get(1).file_id)
-# RasterRLI.delete_raster_rli(1)
+RasterRLIEntity.create_raster_rli(1, 1, 1)
+RasterRLIEntity.create_raster_rli(2, 2, 2)
+print(session.query(RasterRLIEntity).get(1).extent_id)
+RasterRLIEntity.update_raster_rli(1, 2, 2, 2)
+print(session.query(RasterRLIEntity).get(1).file_id)
+# RasterRLIEntity.delete_raster_rli(1)
 # try:
-#     print(session.query(RasterRLI).get(1).file_id)
+#     print(session.query(RasterRLIEntity).get(1).file_id)
 # except:
 #     print("No such RasterRLIs")
 
 print()
 
-# LinkedRLI
+# LinkedRLIEntity
 
-LinkedRLI.create_linked_rli(1, 1, 1, 1, 1)
-LinkedRLI.create_linked_rli(2, 2, 2, 2, 2)
-print(session.query(LinkedRLI).get(1).file_id)
-print(session.query(LinkedRLI).get(2).extent_id)
-print(LinkedRLI.get_linked_rli_by_session_id(1))
-LinkedRLI.update_linked_rli(1, 2, 2, 2, 2, 2)
-LinkedRLI.update_linked_rli(2, 1, 1, 1, 1, 1)
-print(session.query(LinkedRLI).get(1).file_id)
-print(session.query(LinkedRLI).get(2).extent_id)
-# LinkedRLI.delete_linked_rli(1)
-# LinkedRLI.delete_linked_rli(2)
+LinkedRLIEntity.create_linked_rli(1, 1, 1, 1, 1)
+LinkedRLIEntity.create_linked_rli(2, 2, 2, 2, 2)
+print(session.query(LinkedRLIEntity).get(1).file_id)
+print(session.query(LinkedRLIEntity).get(2).extent_id)
+print(LinkedRLIEntity.get_linked_rli_by_session_id(1))
+LinkedRLIEntity.update_linked_rli(1, 2, 2, 2, 2, 2)
+LinkedRLIEntity.update_linked_rli(2, 1, 1, 1, 1, 1)
+print(session.query(LinkedRLIEntity).get(1).file_id)
+print(session.query(LinkedRLIEntity).get(2).extent_id)
+# LinkedRLIEntity.delete_linked_rli(1)
+# LinkedRLIEntity.delete_linked_rli(2)
 # try:
-#     print(session.query(LinkedRLI).get(1).file_id)
-#     print(session.query(LinkedRLI).get(2).extent_id)
+#     print(session.query(LinkedRLIEntity).get(1).file_id)
+#     print(session.query(LinkedRLIEntity).get(2).extent_id)
 # except:
 #     print("No such LinkedRLIs")
 
 print()
 
-# Mark
+# MarkEntity
 
-Mark.create_mark(1, 1)
-Mark.create_mark(2, 2)
-print(session.query(Mark).get(1).coordinates_id)
-print(session.query(Mark).get(2).session_id)
-print(Mark.get_all_marks())
-print(Mark.get_marks_by_session_id(1))
-Mark.update_mark(1, 2, 2)
-Mark.update_mark(2, 1, 1)
-print(session.query(Mark).get(1).coordinates_id)
-print(session.query(Mark).get(2).session_id)
-# Mark.delete_mark(1)
-# Mark.delete_mark(2)
+MarkEntity.create_mark(1, 1)
+MarkEntity.create_mark(2, 2)
+print(session.query(MarkEntity).get(1).coordinates_id)
+print(session.query(MarkEntity).get(2).session_id)
+print(MarkEntity.get_all_marks())
+print(MarkEntity.get_marks_by_session_id(1))
+MarkEntity.update_mark(1, 2, 2)
+MarkEntity.update_mark(2, 1, 1)
+print(session.query(MarkEntity).get(1).coordinates_id)
+print(session.query(MarkEntity).get(2).session_id)
+# MarkEntity.delete_mark(1)
+# MarkEntity.delete_mark(2)
 # try:
-#     print(session.query(Mark).get(1).coordinates_id)
-#     print(session.query(Mark).get(2).session_id)
+#     print(session.query(MarkEntity).get(1).coordinates_id)
+#     print(session.query(MarkEntity).get(2).session_id)
 # except:
 #     print("No such marks")
 
 print()
 
-# RelatingObject
+# RelatingObjectEntity
 
-RelatingObject.create_relating_object(1, "Relating Object")
-print(session.query(RelatingObject).get(1).name)
-RelatingObject.update_relating_object(1, 42, "New Relating Object")
-print(session.query(RelatingObject).get(1).type_relating)
-# RelatingObject.delete_relating_object(1)
+RelatingObjectEntity.create_relating_object(1, "Relating ObjectEntity")
+print(session.query(RelatingObjectEntity).get(1).name)
+RelatingObjectEntity.update_relating_object(1, 42, "New Relating ObjectEntity")
+print(session.query(RelatingObjectEntity).get(1).type_relating)
+# RelatingObjectEntity.delete_relating_object(1)
 # try:
-#     print(session.query(RelatingObject).get(1).name)
+#     print(session.query(RelatingObjectEntity).get(1).name)
 # except:
-#     print("No such RelatingObject")
+#     print("No such RelatingObjectEntity")
 
 print()
 
-# Object
+# ObjectEntity
 
-Object.create_object(1, "object", "object_type", 1, "{meta: meta}")
-Object.create_object(2, "object 2", "object_type_2", 1, "{meta: meta}")
-print(session.query(Object).get(1).meta)
-print(session.query(Object).get(2).type)
-Object.update_object(1, 1, "object 1", "object_type 1", 1, "{meta: meta}")
-Object.update_object(2, 2, "new object 2", "new_object_type_2", 1, "{meta: meta}")
-print(session.query(Object).get(1).type)
-print(session.query(Object).get(2).name)
-# Object.delete_object(1)
-# Object.delete_object(2)
+ObjectEntity.create_object(1, "object", "object_type", 1, "{meta: meta}")
+ObjectEntity.create_object(2, "object 2", "object_type_2", 1, "{meta: meta}")
+print(session.query(ObjectEntity).get(1).meta)
+print(session.query(ObjectEntity).get(2).type)
+ObjectEntity.update_object(1, 1, "object 1", "object_type 1", 1, "{meta: meta}")
+ObjectEntity.update_object(2, 2, "new object 2", "new_object_type_2", 1, "{meta: meta}")
+print(session.query(ObjectEntity).get(1).type)
+print(session.query(ObjectEntity).get(2).name)
+# ObjectEntity.delete_object(1)
+# ObjectEntity.delete_object(2)
 # try:
-#     print(session.query(Object).get(1).type)
-#     print(session.query(Object).get(2).name)
+#     print(session.query(ObjectEntity).get(1).type)
+#     print(session.query(ObjectEntity).get(2).name)
 # except:
 #     print("No such objects")
 
 print()
 
-# Target
+# TargetEntity
 
-Target.create_target(1, 1, 1, "type_key")
-Target.create_target(2, 2, 2, "type_key")
-print(session.query(Target).get(1).sppr_type_key)
-print(session.query(Target).get(2).object_id)
-print(Target.get_targets_by_session_id(1))
-Target.update_target(1, 2, 2, 2, "new_type_key")
-print(session.query(Target).get(1).sppr_type_key)
-Target.delete_target(1)
-Target.delete_target(2)
+TargetEntity.create_target(1, 1, 1, "type_key")
+TargetEntity.create_target(2, 2, 2, "type_key")
+print(session.query(TargetEntity).get(1).sppr_type_key)
+print(session.query(TargetEntity).get(2).object_id)
+print(TargetEntity.get_targets_by_session_id(1))
+TargetEntity.update_target(1, 2, 2, 2, "new_type_key")
+print(session.query(TargetEntity).get(1).sppr_type_key)
+TargetEntity.delete_target(1)
+TargetEntity.delete_target(2)
 try:
-    print(session.query(Target).get(1).sppr_type_key)
-    print(session.query(Target).get(2).object_id)
+    print(session.query(TargetEntity).get(1).sppr_type_key)
+    print(session.query(TargetEntity).get(2).object_id)
 except:
     print("No such targets")
 
 print()
 
-# Region
+# RegionEntity
 
-Region.create_region(1, "Moscow")
-Region.create_region(2, "Minsk")
-print(session.query(Region).get(1))
-print(session.query(Region).get(2))
-for region in Region.get_all_regions():
+RegionEntity.create_region(1, "Moscow")
+RegionEntity.create_region(2, "Minsk")
+print(session.query(RegionEntity).get(1))
+print(session.query(RegionEntity).get(2))
+for region in RegionEntity.get_all_regions():
     print(region.name)
 
-Region.update_region(1, 2, "Astana")
-Region.update_region(2, 1, "Vladivostok")
-for region in Region.get_all_regions():
+RegionEntity.update_region(1, 2, "Astana")
+RegionEntity.update_region(2, 1, "Vladivostok")
+for region in RegionEntity.get_all_regions():
     print(region.name)
 
-Region.delete_region(1)
-Region.delete_region(2)
+RegionEntity.delete_region(1)
+RegionEntity.delete_region(2)
 try:
-    print(session.query(Region).get(1).name)
-    print(session.query(Region).get(2).name)
+    print(session.query(RegionEntity).get(1).name)
+    print(session.query(RegionEntity).get(2).name)
 except:
     print("No such regions")
 
 print()
 
-# TypeBindingMethod
+# TypeBindingMethodEntity
 
-TypeBindingMethod.create_type_binding_method("Type Binding Method")
-print(session.query(TypeBindingMethod).get(1).name)
-TypeBindingMethod.update_type_binding_method(1, "New Type Binding Method")
-print(session.query(TypeBindingMethod).get(1).name)
-TypeBindingMethod.delete_type_binding_method(1)
+TypeBindingMethodEntity.create_type_binding_method("Type Binding Method")
+print(session.query(TypeBindingMethodEntity).get(1).name)
+TypeBindingMethodEntity.update_type_binding_method(1, "New Type Binding Method")
+print(session.query(TypeBindingMethodEntity).get(1).name)
+TypeBindingMethodEntity.delete_type_binding_method(1)
 try:
-    print(session.query(TypeBindingMethod).get(1).name)
+    print(session.query(TypeBindingMethodEntity).get(1).name)
 except:
     print("No such TypeBindingMethods")
 
