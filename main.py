@@ -655,7 +655,7 @@ class Region(BaseModel):
     def delete_region(cls, region_id):
         with cls.mutex:
             region_ = session.query(cls).get(region_id)
-            if region:
+            if region_:
                 session.delete(region_)
                 session.commit()
 
