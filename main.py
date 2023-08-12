@@ -3,6 +3,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 import threading
 from datetime import datetime
+import os
+import xlwt
 
 # Создание подключения к базе данных
 engine = create_engine('sqlite:///RLSDB.db')
@@ -342,9 +344,10 @@ class RLIEntity(BaseEntity):
             ids_of_files_with_session_id = list(map(lambda x: x.id, session.query(FileEntity).
                                                     filter_by(session_id=session_id).all()))
 
-            # Выбираем id RawRLIs по соответсвующим id файлов
+            # Получаем RawRLIEntity по соответсвующим file_id
             raw_rli_ids_with_session_id = list(map(lambda x: x.id, session.query(RawRLIEntity).
-                                                   filter(RawRLIEntity.file_id.in_(ids_of_files_with_session_id)).all()))
+                                                   filter(
+                RawRLIEntity.file_id.in_(ids_of_files_with_session_id)).all()))
 
             # Возваращаем соответствующие RLIs по id RawRLIs
             return session.query(cls).filter(cls.raw_rli_id.in_(raw_rli_ids_with_session_id)).all()
@@ -692,7 +695,7 @@ class RegionEntity(BaseEntity):
     def delete_region(cls, region_id):
         with cls.mutex:
             region_ = session.query(cls).get(region_id)
-            if region:
+            if region_:
                 session.delete(region_)
                 session.commit()
 
@@ -716,311 +719,460 @@ class RegionEntity(BaseEntity):
 # Создание таблиц
 Base.metadata.create_all(bind=engine)
 
-# Проверка работы методов
 
-# TypeSessions
+class XLSReportGeneratorBySessionId:
+    def __init__(self, session_id, output_dir='xls_report', filename='report.xls'):
+        self.output_dir = output_dir
+        self.session_id = session_id
+        self.filename = filename
+        self.create_directory()
+        self.file_path = os.path.join(self.output_dir,
+                                      self.filename.replace('.', '_with_session_id_' + str(self.session_id) + '.'))
 
-TypeSessionEntity.create_type_session("Type 1")
-print(session.query(TypeSessionEntity).get(1).name)
-TypeSessionEntity.create_type_session("Type 2")
-print(session.query(TypeSessionEntity).get(2).name)
-TypeSessionEntity.update_type_session(1, "New SessionEntity")
-TypeSessionEntity.update_type_session(2, "New SessionEntity 2")
-print(session.query(TypeSessionEntity).get(1).name)
-print(session.query(TypeSessionEntity).get(2).name)
-# TypeSessionEntity.delete_type_session(1)
-# TypeSessionEntity.delete_type_session(2)
+        self.workbook = xlwt.Workbook()
+
+        self.center_alignment_style = xlwt.easyxf("align: horiz center, vert center; font: height 220;")
+        self.header_row_style = xlwt.easyxf('pattern: pattern solid, fore_colour light_green;'
+                                            'font: bold on, height 220;'
+                                            'align: horiz center, vert center;')
+
+        self.rli_columns = [
+            {'header': 'Индентификатор Сырого РЛИ', 'data_func': lambda data: data.id},
+            {'header': 'Идентификатор сессии', 'data_func': lambda data: self.session_id},
+            {'header': 'Идентификатор файла', 'data_func': lambda data: data.file_id},
+            {'header': 'Наименование файла', 'data_func': lambda data: session.query(FileEntity).
+                get(data.file_id).name},
+            {'header': 'Путь к файлу', 'data_func': lambda data: session.query(FileEntity).
+                get(data.file_id).path_to_file},
+            {'header': 'Расширение файла', 'data_func': lambda data: session.query(FileEntity).
+                get(data.file_id).file_extension},
+            {'header': 'Идентификатор типа источника', 'data_func': lambda data: data.type_source_rli_id},
+            {'header': 'Наименование типа источника', 'data_func': lambda data: session.query(TypeSourceRLIEntity).
+                get(data.type_source_rli_id).name},
+            {'header': 'Дата и время получения', 'data_func': lambda data: data.date_receiving}
+        ]
+
+        self.targets_columns = [
+            {'header': 'Идентификатор цели', 'data_func': lambda data: data.id},
+            {'header': 'Идентификатор сессии', 'data_func': lambda data: self.session_id},
+            {'header': 'Номер цели', 'data_func': lambda data: data.number},
+            {'header': 'Идентификатор объекта', 'data_func': lambda data: data.object_id},
+            {'header': 'Идентификатор Отметки', 'data_func': lambda data: session.query(ObjectEntity).
+                get(data.object_id).mark_id},
+            {'header': 'Наименование объекта', 'data_func': lambda data: session.query(ObjectEntity).
+                get(data.object_id).name},
+            {'header': 'Тип объекта', 'data_func': lambda data: session.query(ObjectEntity).
+                get(data.object_id).type},
+            {'header': 'Принадлежность объекта (идентификатор)', 'data_func': lambda data: session.query(ObjectEntity).
+                get(data.object_id).relating_object_id},
+            {'header': 'Meta данные', 'data_func': lambda data: session.query(ObjectEntity).
+                get(data.object_id).meta},
+            {'header': 'Идентификатор РЛИ', 'data_func': lambda data: session.query(RLIEntity).
+                get(session.query(RasterRLIEntity).get(data.raster_rli_id).rli_id).id},
+            {'header': 'Время локации', 'data_func': lambda data: session.query(RLIEntity).
+                get(session.query(RasterRLIEntity).get(data.raster_rli_id).rli_id).time_location},
+            {'header': 'Наименование РЛИ', 'data_func': lambda data: session.query(RLIEntity).
+                get(session.query(RasterRLIEntity).get(data.raster_rli_id).rli_id).name},
+            {'header': 'Признак обработки', 'data_func': lambda data: session.query(RLIEntity).
+                get(session.query(RasterRLIEntity).get(data.raster_rli_id).rli_id).is_processing},
+            {'header': 'Идентификатор сырого РЛИ', 'data_func': lambda data: session.query(RLIEntity).
+                get(session.query(RasterRLIEntity).get(data.raster_rli_id).rli_id).raw_rli_id},
+            {'header': 'Дата и время отправки', 'data_func': lambda data: data.datetime_sending},
+            {'header': 'SPPR TYPE KEY', 'data_func': lambda data: data.sppr_type_key}
+        ]
+
+    def create_directory(self):
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+
+    @staticmethod
+    def set_column_width(worksheet, column_index, value):
+        column_width = len(str(value)) * 300
+        if worksheet.col(column_index).width < column_width:
+            worksheet.col(column_index).width = column_width
+
+    @staticmethod
+    def format_bool(value):
+        return 'Обработан' if value else 'Не обработан'
+
+    @staticmethod
+    def format_datetime(value):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+
+    def generate_xls_report_raw_rli(self):
+        worksheet = self.workbook.add_sheet('Отчет по сырому РЛИ за сессию')
+
+        list_of_raw_rli = self.get_raw_rli_data()
+
+        self.write_header_row(worksheet, self.rli_columns)
+
+        for row_index, raw_rli_data in enumerate(list_of_raw_rli):
+            self.write_data_rli_row(worksheet, row_index + 1, raw_rli_data)
+
+        self.workbook.save(self.file_path)
+        print('XLS report generated at {}'.format(self.file_path))
+
+    def get_raw_rli_data(self):
+        ids_of_files_with_session_id = [
+            x.id for x in session.query(FileEntity).filter_by(session_id=self.session_id).all()
+        ]
+
+        return session.query(RawRLIEntity).filter(RawRLIEntity.file_id.in_(ids_of_files_with_session_id)).all()
+
+    def write_header_row(self, worksheet, columns):
+        for column_index, column_info in enumerate(columns):
+            column_name = column_info['header']
+            worksheet.write(0, column_index, column_name, self.header_row_style)
+            self.set_column_width(worksheet, column_index, column_name)
+
+    def write_data_rli_row(self, worksheet, row_index, raw_rli_data):
+        for column_index, column_info in enumerate(self.rli_columns):
+            value = column_info['data_func'](raw_rli_data)
+            if isinstance(value, datetime):
+                value = self.format_datetime(value)
+            worksheet.write(row_index, column_index, value, self.center_alignment_style)
+            self.set_column_width(worksheet, column_index, value)
+
+    def generate_xls_report_targets(self):
+        worksheet = self.workbook.add_sheet('Отчет по целям за сессию')
+
+        list_of_targets = TargetEntity.get_targets_by_session_id(self.session_id)
+
+        self.write_header_row(worksheet, self.targets_columns)
+
+        for row_index, target_data in enumerate(list_of_targets):
+            self.write_data_target_row(worksheet, row_index + 1, target_data)
+
+        self.workbook.save(self.file_path)
+        print('XLS report generated at {}'.format(self.file_path))
+
+    def write_data_target_row(self, worksheet, row_index, target_data):
+        for column_index, column_info in enumerate(self.targets_columns):
+            value = column_info['data_func'](target_data)
+            if isinstance(value, bool):
+                value = self.format_bool(value)
+            elif isinstance(value, datetime):
+                value = self.format_datetime(value)
+
+            worksheet.write(row_index, column_index, value, self.center_alignment_style)
+            self.set_column_width(worksheet, column_index, value)
+
+
+report_generator = XLSReportGeneratorBySessionId(session_id=1)
+report_generator.generate_xls_report_raw_rli()
+report_generator.generate_xls_report_targets()
+
+# # Проверка работы методов
+#
+# # TypeSessions
+#
+# TypeSessionEntity.create_type_session("Type 1")
+# print(session.query(TypeSessionEntity).get(1).name)
+# TypeSessionEntity.create_type_session("Type 2")
+# print(session.query(TypeSessionEntity).get(2).name)
+# TypeSessionEntity.update_type_session(1, "New SessionEntity")
+# TypeSessionEntity.update_type_session(2, "New SessionEntity 2")
+# print(session.query(TypeSessionEntity).get(1).name)
+# print(session.query(TypeSessionEntity).get(2).name)
+# # TypeSessionEntity.delete_type_session(1)
+# # TypeSessionEntity.delete_type_session(2)
+# # try:
+# #     print(session.query(TypeSessionEntity).get(1).name)
+# #     print(session.query(TypeSessionEntity).get(2).name)
+# # except:
+# #     print("No such TypeSessions")
+#
+# print()
+#
+# # TypeSourceRLIs
+#
+# TypeSourceRLIEntity.create_type_source_rli("TypeSourceRLIEntity 1")
+# print(session.query(TypeSourceRLIEntity).get(1).name)
+# TypeSourceRLIEntity.create_type_source_rli("TypeSourceRLIEntity 2")
+# print(session.query(TypeSourceRLIEntity).get(2).name)
+# TypeSourceRLIEntity.update_type_source_rli(1, "New TypeSourceRLIEntity")
+# TypeSourceRLIEntity.update_type_source_rli(2, "New TypeSourceRLIEntity 2")
+# print(session.query(TypeSourceRLIEntity).get(1).name)
+# print(session.query(TypeSourceRLIEntity).get(2).name)
+# # TypeSourceRLIEntity.delete_type_source_rli(1)
+# # TypeSourceRLIEntity.delete_type_source_rli(2)
+# # try:
+# #     print(session.query(TypeSourceRLIEntity).get(1).name)
+# #     print(session.query(TypeSourceRLIEntity).get(2).name)
+# # except:
+# #     print("No such TypeSourceRLIs")
+#
+# print()
+#
+# # SessionEntity
+#
+# SessionEntity.create_session("SessionEntity 1", "/some/some/session_1", session.query(TypeSessionEntity).get(1).id)
+#
+#
+# print(session.query(SessionEntity).get(1).name, session.query(SessionEntity).get(1).path_to_directory,
+#       session.query(SessionEntity).get(1).type_session_id, session.query(SessionEntity).get(1).date)
+# SessionEntity.create_session("SessionEntity 2", "/some/some/session_2", session.query(TypeSessionEntity).get(2).id)
+# print(session.query(SessionEntity).get(2).name, session.query(SessionEntity).get(2).path_to_directory,
+#       session.query(SessionEntity).get(2).type_session_id, session.query(SessionEntity).get(2).date)
+# SessionEntity.update_session(1, "Update SessionEntity 1", "/some/some/update_session_1", session.query(TypeSessionEntity).get(2).id)
+# SessionEntity.update_session(2, "Update SessionEntity 2", "/some/some/update_session_2", session.query(TypeSessionEntity).get(1).id)
+# print(session.query(SessionEntity).get(1).name, session.query(SessionEntity).get(1).path_to_directory,
+#       session.query(SessionEntity).get(1).type_session_id, session.query(SessionEntity).get(1).date)
+# print(session.query(SessionEntity).get(2).name, session.query(SessionEntity).get(2).path_to_directory,
+#       session.query(SessionEntity).get(2).type_session_id, session.query(SessionEntity).get(2).date)
+# print(SessionEntity.get_all_sessions())
+# # SessionEntity.delete_session(1)
+# # SessionEntity.delete_session(2)
+# # try:
+# #     print(session.query(SessionEntity).get(1).name)
+# #     print(session.query(SessionEntity).get(2).name)
+# # except:
+# #     print("No such Sessions")
+#
+# # CoordinatesEntity
+#
+# CoordinatesEntity.create_coordinates(56.24112, 54.12331, 45.4214)
+# CoordinatesEntity.create_coordinates(46.24212, 44.1231, 47.4214)
+# print(session.query(CoordinatesEntity).get(1).latitude)
+# print(session.query(CoordinatesEntity).get(2).altitude)
+# CoordinatesEntity.update_coordinates(1, 24.5225, 34.252, 56.1242)
+# CoordinatesEntity.update_coordinates(2, 42.5225, 33.252, 76.1242)
+# print(session.query(CoordinatesEntity).get(1).longitude)
+# print(session.query(CoordinatesEntity).get(2).latitude)
+# # CoordinatesEntity.delete_coordinates(1)
+# # CoordinatesEntity.delete_coordinates(2)
+# # try:
+# #     print(session.query(CoordinatesEntity).get(1).latitude)
+# #     print(session.query(CoordinatesEntity).get(2).latitude)
+# # except:
+# #     print("No such CoordinatesEntity")
+#
+# # ExtentEntity
+#
+# ExtentEntity.create_extent(1, 1, 2, 2)
+# ExtentEntity.create_extent(2, 2, 1, 1)
+# print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(1).top_left_id))
+# print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(2).bot_left_id))
+# ExtentEntity.update_extent(1, 2, 2, 2, 2)
+# ExtentEntity.update_extent(2, 1, 1, 1, 1)
+# print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(1).top_left_id))
+# print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(2).bot_left_id))
+# # ExtentEntity.delete_extent(1)
+# # ExtentEntity.delete_extent(2)
+# # try:
+# #     print(session.query(ExtentEntity).get(1).top_left_id)
+# #     print(session.query(ExtentEntity).get(2).top_left_id)
+# # except:
+# #     print("No such Extents")
+#
+# print()
+#
+# # FileEntity
+#
+# FileEntity.create_file("FileEntity 1", "path_to_file", "file_extension", 1)
+# FileEntity.create_file("FileEntity 2", "path_to_file", "file_extension", 2)
+# print(session.query(FileEntity).get(1).name, session.query(FileEntity).get(1).path_to_file)
+# print(session.query(FileEntity).get(2).session_id)
+# FileEntity.update_file(1, "New FileEntity 1", "new_path_to_file", "new_file_extension", 2)
+# FileEntity.update_file(2, "New FileEntity 2", "new_path_to_file", "new_file_extension", 1)
+# print(session.query(FileEntity).get(1).name, session.query(FileEntity).get(1).path_to_file)
+# print(session.query(FileEntity).get(2).session_id)
+# # FileEntity.delete_file(1)
+# # FileEntity.delete_file(2)
+# # try:
+# #     print(session.query(FileEntity).get(1).name, session.query(FileEntity).get(1).path_to_file)
+# #     print(session.query(FileEntity).get(2).session_id)
+# # except:
+# #     print("No such files")
+#
+# print()
+#
+# # RawRLIEntity
+#
+# RawRLIEntity.create_raw_rli(1, 1)
+# RawRLIEntity.create_raw_rli(2, 2)
+# print(session.query(RawRLIEntity).get(1).type_source_rli_id)
+# print(session.query(RawRLIEntity).get(2).file_id, session.query(RawRLIEntity).get(2).date_receiving)
+# RawRLIEntity.update_raw_rli(1, 2, 2)
+# RawRLIEntity.update_raw_rli(2, 1, 1)
+# print(session.query(RawRLIEntity).get(1).type_source_rli_id)
+# print(session.query(RawRLIEntity).get(2).file_id)
+# # RawRLIEntity.delete_raw_rli(1)
+# # RawRLIEntity.delete_raw_rli(2)
+# # try:
+# #     print(session.query(RawRLIEntity).get(1).type_source_rli_id)
+# #     print(session.query(RawRLIEntity).get(2).file_id)
+# # except:
+# #     print("No such RLIs")
+#
+# print()
+#
+# # RLIEntity
+#
+# RLIEntity.create_rli("RLIEntity 1", True, 1)
+# RLIEntity.create_rli("RLIEntity 2", False, 2)
+# print(session.query(RLIEntity).get(1).time_location, session.query(RLIEntity).get(1).name,
+#       session.query(RLIEntity).get(1).is_processing, session.query(RLIEntity).get(1).raw_rli_id)
+# print(session.query(RLIEntity).get(2).time_location, session.query(RLIEntity).get(2).name,
+#       session.query(RLIEntity).get(2).is_processing, session.query(RLIEntity).get(2).raw_rli_id)
+# RLIEntity.update_rli(2, " New RLIEntity 2", True, 2)
+# print(session.query(RLIEntity).get(2).time_location, session.query(RLIEntity).get(2).name,
+#       session.query(RLIEntity).get(2).is_processing, session.query(RLIEntity).get(2).raw_rli_id)
+# for rli in RLIEntity.get_rli_by_session_id(1):
+#     print(rli.name)
+# print(RLIEntity.get_rli_by_session_id(1))
+#
+# print()
+#
+# # RasterRLIEntity
+#
+# RasterRLIEntity.create_raster_rli(1, 1, 1)
+# RasterRLIEntity.create_raster_rli(2, 2, 2)
+# print(session.query(RasterRLIEntity).get(1).extent_id)
+# RasterRLIEntity.update_raster_rli(1, 2, 2, 2)
+# print(session.query(RasterRLIEntity).get(1).file_id)
+# # RasterRLIEntity.delete_raster_rli(1)
+# # try:
+# #     print(session.query(RasterRLIEntity).get(1).file_id)
+# # except:
+# #     print("No such RasterRLIs")
+#
+# print()
+#
+# # LinkedRLIEntity
+#
+# LinkedRLIEntity.create_linked_rli(1, 1, 1, 1, 1)
+# LinkedRLIEntity.create_linked_rli(2, 2, 2, 2, 2)
+# print(session.query(LinkedRLIEntity).get(1).file_id)
+# print(session.query(LinkedRLIEntity).get(2).extent_id)
+# print(LinkedRLIEntity.get_linked_rli_by_session_id(1))
+# LinkedRLIEntity.update_linked_rli(1, 2, 2, 2, 2, 2)
+# LinkedRLIEntity.update_linked_rli(2, 1, 1, 1, 1, 1)
+# print(session.query(LinkedRLIEntity).get(1).file_id)
+# print(session.query(LinkedRLIEntity).get(2).extent_id)
+# # LinkedRLIEntity.delete_linked_rli(1)
+# # LinkedRLIEntity.delete_linked_rli(2)
+# # try:
+# #     print(session.query(LinkedRLIEntity).get(1).file_id)
+# #     print(session.query(LinkedRLIEntity).get(2).extent_id)
+# # except:
+# #     print("No such LinkedRLIs")
+#
+# print()
+#
+# # MarkEntity
+#
+# MarkEntity.create_mark(1, 1)
+# MarkEntity.create_mark(2, 2)
+# print(session.query(MarkEntity).get(1).coordinates_id)
+# print(session.query(MarkEntity).get(2).session_id)
+# print(MarkEntity.get_all_marks())
+# print(MarkEntity.get_marks_by_session_id(1))
+# MarkEntity.update_mark(1, 2, 2)
+# MarkEntity.update_mark(2, 1, 1)
+# print(session.query(MarkEntity).get(1).coordinates_id)
+# print(session.query(MarkEntity).get(2).session_id)
+# # MarkEntity.delete_mark(1)
+# # MarkEntity.delete_mark(2)
+# # try:
+# #     print(session.query(MarkEntity).get(1).coordinates_id)
+# #     print(session.query(MarkEntity).get(2).session_id)
+# # except:
+# #     print("No such marks")
+#
+# print()
+#
+# # RelatingObjectEntity
+#
+# RelatingObjectEntity.create_relating_object(1, "Relating ObjectEntity")
+# print(session.query(RelatingObjectEntity).get(1).name)
+# RelatingObjectEntity.update_relating_object(1, 42, "New Relating ObjectEntity")
+# print(session.query(RelatingObjectEntity).get(1).type_relating)
+# # RelatingObjectEntity.delete_relating_object(1)
+# # try:
+# #     print(session.query(RelatingObjectEntity).get(1).name)
+# # except:
+# #     print("No such RelatingObjectEntity")
+#
+# print()
+#
+# # ObjectEntity
+#
+# ObjectEntity.create_object(1, "object", "object_type", 1, "{meta: meta}")
+# ObjectEntity.create_object(2, "object 2", "object_type_2", 1, "{meta: meta}")
+# print(session.query(ObjectEntity).get(1).meta)
+# print(session.query(ObjectEntity).get(2).type)
+# ObjectEntity.update_object(1, 1, "object 1", "object_type 1", 1, "{meta: meta}")
+# ObjectEntity.update_object(2, 2, "new object 2", "new_object_type_2", 1, "{meta: meta}")
+# print(session.query(ObjectEntity).get(1).type)
+# print(session.query(ObjectEntity).get(2).name)
+# # ObjectEntity.delete_object(1)
+# # ObjectEntity.delete_object(2)
+# # try:
+# #     print(session.query(ObjectEntity).get(1).type)
+# #     print(session.query(ObjectEntity).get(2).name)
+# # except:
+# #     print("No such objects")
+#
+# print()
+#
+# # TargetEntity
+#
+# TargetEntity.create_target(1, 1, 1, "type_key")
+# TargetEntity.create_target(2, 2, 2, "type_key")
+# print(session.query(TargetEntity).get(1).sppr_type_key)
+# print(session.query(TargetEntity).get(2).object_id)
+# print(TargetEntity.get_targets_by_session_id(1))
+# TargetEntity.update_target(1, 2, 2, 2, "new_type_key")
+# print(session.query(TargetEntity).get(1).sppr_type_key)
+# print()
+#
+# for target in TargetEntity.get_targets_by_session_id(1):
+#     print(target.sppr_type_key)
+# #
+# print()
+# TargetEntity.delete_target(1)
+# TargetEntity.delete_target(2)
 # try:
-#     print(session.query(TypeSessionEntity).get(1).name)
-#     print(session.query(TypeSessionEntity).get(2).name)
+#     print(session.query(TargetEntity).get(1).sppr_type_key)
+#     print(session.query(TargetEntity).get(2).object_id)
 # except:
-#     print("No such TypeSessions")
-
-print()
-
-# TypeSourceRLIs
-
-TypeSourceRLIEntity.create_type_source_rli("TypeSourceRLIEntity 1")
-print(session.query(TypeSourceRLIEntity).get(1).name)
-TypeSourceRLIEntity.create_type_source_rli("TypeSourceRLIEntity 2")
-print(session.query(TypeSourceRLIEntity).get(2).name)
-TypeSourceRLIEntity.update_type_source_rli(1, "New TypeSourceRLIEntity")
-TypeSourceRLIEntity.update_type_source_rli(2, "New TypeSourceRLIEntity 2")
-print(session.query(TypeSourceRLIEntity).get(1).name)
-print(session.query(TypeSourceRLIEntity).get(2).name)
-# TypeSourceRLIEntity.delete_type_source_rli(1)
-# TypeSourceRLIEntity.delete_type_source_rli(2)
+#     print("No such targets")
+#
+# print()
+#
+# # RegionEntity
+#
+# RegionEntity.create_region(1, "Moscow")
+# RegionEntity.create_region(2, "Minsk")
+# print(session.query(RegionEntity).get(1))
+# print(session.query(RegionEntity).get(2))
+# for region in RegionEntity.get_all_regions():
+#     print(region.name)
+#
+# RegionEntity.update_region(1, 2, "Astana")
+# RegionEntity.update_region(2, 1, "Vladivostok")
+# for region in RegionEntity.get_all_regions():
+#     print(region.name)
+#
+# RegionEntity.delete_region(1)
+# RegionEntity.delete_region(2)
 # try:
-#     print(session.query(TypeSourceRLIEntity).get(1).name)
-#     print(session.query(TypeSourceRLIEntity).get(2).name)
+#     print(session.query(RegionEntity).get(1).name)
+#     print(session.query(RegionEntity).get(2).name)
 # except:
-#     print("No such TypeSourceRLIs")
-
-print()
-
-# SessionEntity
-
-SessionEntity.create_session("SessionEntity 1", "/some/some/session_1", session.query(TypeSessionEntity).get(1).id)
-
-
-print(session.query(SessionEntity).get(1).name, session.query(SessionEntity).get(1).path_to_directory,
-      session.query(SessionEntity).get(1).type_session_id, session.query(SessionEntity).get(1).date)
-SessionEntity.create_session("SessionEntity 2", "/some/some/session_2", session.query(TypeSessionEntity).get(2).id)
-print(session.query(SessionEntity).get(2).name, session.query(SessionEntity).get(2).path_to_directory,
-      session.query(SessionEntity).get(2).type_session_id, session.query(SessionEntity).get(2).date)
-SessionEntity.update_session(1, "Update SessionEntity 1", "/some/some/update_session_1", session.query(TypeSessionEntity).get(2).id)
-SessionEntity.update_session(2, "Update SessionEntity 2", "/some/some/update_session_2", session.query(TypeSessionEntity).get(1).id)
-print(session.query(SessionEntity).get(1).name, session.query(SessionEntity).get(1).path_to_directory,
-      session.query(SessionEntity).get(1).type_session_id, session.query(SessionEntity).get(1).date)
-print(session.query(SessionEntity).get(2).name, session.query(SessionEntity).get(2).path_to_directory,
-      session.query(SessionEntity).get(2).type_session_id, session.query(SessionEntity).get(2).date)
-print(SessionEntity.get_all_sessions())
-# SessionEntity.delete_session(1)
-# SessionEntity.delete_session(2)
+#     print("No such regions")
+#
+# print()
+#
+# # TypeBindingMethodEntity
+#
+# TypeBindingMethodEntity.create_type_binding_method("Type Binding Method")
+# print(session.query(TypeBindingMethodEntity).get(1).name)
+# TypeBindingMethodEntity.update_type_binding_method(1, "New Type Binding Method")
+# print(session.query(TypeBindingMethodEntity).get(1).name)
+# TypeBindingMethodEntity.delete_type_binding_method(1)
 # try:
-#     print(session.query(SessionEntity).get(1).name)
-#     print(session.query(SessionEntity).get(2).name)
+#     print(session.query(TypeBindingMethodEntity).get(1).name)
 # except:
-#     print("No such Sessions")
-
-# CoordinatesEntity
-
-CoordinatesEntity.create_coordinates(56.24112, 54.12331, 45.4214)
-CoordinatesEntity.create_coordinates(46.24212, 44.1231, 47.4214)
-print(session.query(CoordinatesEntity).get(1).latitude)
-print(session.query(CoordinatesEntity).get(2).altitude)
-CoordinatesEntity.update_coordinates(1, 24.5225, 34.252, 56.1242)
-CoordinatesEntity.update_coordinates(2, 42.5225, 33.252, 76.1242)
-print(session.query(CoordinatesEntity).get(1).longitude)
-print(session.query(CoordinatesEntity).get(2).latitude)
-# CoordinatesEntity.delete_coordinates(1)
-# CoordinatesEntity.delete_coordinates(2)
-# try:
-#     print(session.query(CoordinatesEntity).get(1).latitude)
-#     print(session.query(CoordinatesEntity).get(2).latitude)
-# except:
-#     print("No such CoordinatesEntity")
-
-# ExtentEntity
-
-ExtentEntity.create_extent(1, 1, 2, 2)
-ExtentEntity.create_extent(2, 2, 1, 1)
-print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(1).top_left_id))
-print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(2).bot_left_id))
-ExtentEntity.update_extent(1, 2, 2, 2, 2)
-ExtentEntity.update_extent(2, 1, 1, 1, 1)
-print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(1).top_left_id))
-print(session.query(CoordinatesEntity).get(session.query(ExtentEntity).get(2).bot_left_id))
-# ExtentEntity.delete_extent(1)
-# ExtentEntity.delete_extent(2)
-# try:
-#     print(session.query(ExtentEntity).get(1).top_left_id)
-#     print(session.query(ExtentEntity).get(2).top_left_id)
-# except:
-#     print("No such Extents")
-
-print()
-
-# FileEntity
-
-FileEntity.create_file("FileEntity 1", "path_to_file", "file_extension", 1)
-FileEntity.create_file("FileEntity 2", "path_to_file", "file_extension", 2)
-print(session.query(FileEntity).get(1).name, session.query(FileEntity).get(1).path_to_file)
-print(session.query(FileEntity).get(2).session_id)
-FileEntity.update_file(1, "New FileEntity 1", "new_path_to_file", "new_file_extension", 2)
-FileEntity.update_file(2, "New FileEntity 2", "new_path_to_file", "new_file_extension", 1)
-print(session.query(FileEntity).get(1).name, session.query(FileEntity).get(1).path_to_file)
-print(session.query(FileEntity).get(2).session_id)
-# FileEntity.delete_file(1)
-# FileEntity.delete_file(2)
-# try:
-#     print(session.query(FileEntity).get(1).name, session.query(FileEntity).get(1).path_to_file)
-#     print(session.query(FileEntity).get(2).session_id)
-# except:
-#     print("No such files")
-
-print()
-
-# RawRLIEntity
-
-RawRLIEntity.create_raw_rli(1, 1)
-RawRLIEntity.create_raw_rli(2, 2)
-print(session.query(RawRLIEntity).get(1).type_source_rli_id)
-print(session.query(RawRLIEntity).get(2).file_id, session.query(RawRLIEntity).get(2).date_receiving)
-RawRLIEntity.update_raw_rli(1, 2, 2)
-RawRLIEntity.update_raw_rli(2, 1, 1)
-print(session.query(RawRLIEntity).get(1).type_source_rli_id)
-print(session.query(RawRLIEntity).get(2).file_id)
-# RawRLIEntity.delete_raw_rli(1)
-# RawRLIEntity.delete_raw_rli(2)
-# try:
-#     print(session.query(RawRLIEntity).get(1).type_source_rli_id)
-#     print(session.query(RawRLIEntity).get(2).file_id)
-# except:
-#     print("No such RLIs")
-
-print()
-
-# RLIEntity
-
-RLIEntity.create_rli("RLIEntity 1", True, 1)
-RLIEntity.create_rli("RLIEntity 2", False, 2)
-print(session.query(RLIEntity).get(1).time_location, session.query(RLIEntity).get(1).name,
-      session.query(RLIEntity).get(1).is_processing, session.query(RLIEntity).get(1).raw_rli_id)
-print(session.query(RLIEntity).get(2).time_location, session.query(RLIEntity).get(2).name,
-      session.query(RLIEntity).get(2).is_processing, session.query(RLIEntity).get(2).raw_rli_id)
-RLIEntity.update_rli(2, " New RLIEntity 2", True, 2)
-print(session.query(RLIEntity).get(2).time_location, session.query(RLIEntity).get(2).name,
-      session.query(RLIEntity).get(2).is_processing, session.query(RLIEntity).get(2).raw_rli_id)
-
-print(RLIEntity.get_rli_by_session_id(1))
-
-print()
-
-# RasterRLIEntity
-
-RasterRLIEntity.create_raster_rli(1, 1, 1)
-RasterRLIEntity.create_raster_rli(2, 2, 2)
-print(session.query(RasterRLIEntity).get(1).extent_id)
-RasterRLIEntity.update_raster_rli(1, 2, 2, 2)
-print(session.query(RasterRLIEntity).get(1).file_id)
-# RasterRLIEntity.delete_raster_rli(1)
-# try:
-#     print(session.query(RasterRLIEntity).get(1).file_id)
-# except:
-#     print("No such RasterRLIs")
-
-print()
-
-# LinkedRLIEntity
-
-LinkedRLIEntity.create_linked_rli(1, 1, 1, 1, 1)
-LinkedRLIEntity.create_linked_rli(2, 2, 2, 2, 2)
-print(session.query(LinkedRLIEntity).get(1).file_id)
-print(session.query(LinkedRLIEntity).get(2).extent_id)
-print(LinkedRLIEntity.get_linked_rli_by_session_id(1))
-LinkedRLIEntity.update_linked_rli(1, 2, 2, 2, 2, 2)
-LinkedRLIEntity.update_linked_rli(2, 1, 1, 1, 1, 1)
-print(session.query(LinkedRLIEntity).get(1).file_id)
-print(session.query(LinkedRLIEntity).get(2).extent_id)
-# LinkedRLIEntity.delete_linked_rli(1)
-# LinkedRLIEntity.delete_linked_rli(2)
-# try:
-#     print(session.query(LinkedRLIEntity).get(1).file_id)
-#     print(session.query(LinkedRLIEntity).get(2).extent_id)
-# except:
-#     print("No such LinkedRLIs")
-
-print()
-
-# MarkEntity
-
-MarkEntity.create_mark(1, 1)
-MarkEntity.create_mark(2, 2)
-print(session.query(MarkEntity).get(1).coordinates_id)
-print(session.query(MarkEntity).get(2).session_id)
-print(MarkEntity.get_all_marks())
-print(MarkEntity.get_marks_by_session_id(1))
-MarkEntity.update_mark(1, 2, 2)
-MarkEntity.update_mark(2, 1, 1)
-print(session.query(MarkEntity).get(1).coordinates_id)
-print(session.query(MarkEntity).get(2).session_id)
-# MarkEntity.delete_mark(1)
-# MarkEntity.delete_mark(2)
-# try:
-#     print(session.query(MarkEntity).get(1).coordinates_id)
-#     print(session.query(MarkEntity).get(2).session_id)
-# except:
-#     print("No such marks")
-
-print()
-
-# RelatingObjectEntity
-
-RelatingObjectEntity.create_relating_object(1, "Relating ObjectEntity")
-print(session.query(RelatingObjectEntity).get(1).name)
-RelatingObjectEntity.update_relating_object(1, 42, "New Relating ObjectEntity")
-print(session.query(RelatingObjectEntity).get(1).type_relating)
-# RelatingObjectEntity.delete_relating_object(1)
-# try:
-#     print(session.query(RelatingObjectEntity).get(1).name)
-# except:
-#     print("No such RelatingObjectEntity")
-
-print()
-
-# ObjectEntity
-
-ObjectEntity.create_object(1, "object", "object_type", 1, "{meta: meta}")
-ObjectEntity.create_object(2, "object 2", "object_type_2", 1, "{meta: meta}")
-print(session.query(ObjectEntity).get(1).meta)
-print(session.query(ObjectEntity).get(2).type)
-ObjectEntity.update_object(1, 1, "object 1", "object_type 1", 1, "{meta: meta}")
-ObjectEntity.update_object(2, 2, "new object 2", "new_object_type_2", 1, "{meta: meta}")
-print(session.query(ObjectEntity).get(1).type)
-print(session.query(ObjectEntity).get(2).name)
-# ObjectEntity.delete_object(1)
-# ObjectEntity.delete_object(2)
-# try:
-#     print(session.query(ObjectEntity).get(1).type)
-#     print(session.query(ObjectEntity).get(2).name)
-# except:
-#     print("No such objects")
-
-print()
-
-# TargetEntity
-
-TargetEntity.create_target(1, 1, 1, "type_key")
-TargetEntity.create_target(2, 2, 2, "type_key")
-print(session.query(TargetEntity).get(1).sppr_type_key)
-print(session.query(TargetEntity).get(2).object_id)
-print(TargetEntity.get_targets_by_session_id(1))
-TargetEntity.update_target(1, 2, 2, 2, "new_type_key")
-print(session.query(TargetEntity).get(1).sppr_type_key)
-TargetEntity.delete_target(1)
-TargetEntity.delete_target(2)
-try:
-    print(session.query(TargetEntity).get(1).sppr_type_key)
-    print(session.query(TargetEntity).get(2).object_id)
-except:
-    print("No such targets")
-
-print()
-
-# RegionEntity
-
-RegionEntity.create_region(1, "Moscow")
-RegionEntity.create_region(2, "Minsk")
-print(session.query(RegionEntity).get(1))
-print(session.query(RegionEntity).get(2))
-for region in RegionEntity.get_all_regions():
-    print(region.name)
-
-RegionEntity.update_region(1, 2, "Astana")
-RegionEntity.update_region(2, 1, "Vladivostok")
-for region in RegionEntity.get_all_regions():
-    print(region.name)
-
-RegionEntity.delete_region(1)
-RegionEntity.delete_region(2)
-try:
-    print(session.query(RegionEntity).get(1).name)
-    print(session.query(RegionEntity).get(2).name)
-except:
-    print("No such regions")
-
-print()
-
-# TypeBindingMethodEntity
-
-TypeBindingMethodEntity.create_type_binding_method("Type Binding Method")
-print(session.query(TypeBindingMethodEntity).get(1).name)
-TypeBindingMethodEntity.update_type_binding_method(1, "New Type Binding Method")
-print(session.query(TypeBindingMethodEntity).get(1).name)
-TypeBindingMethodEntity.delete_type_binding_method(1)
-try:
-    print(session.query(TypeBindingMethodEntity).get(1).name)
-except:
-    print("No such TypeBindingMethods")
-
+#     print("No such TypeBindingMethods")
