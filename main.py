@@ -781,6 +781,9 @@ class XLSReportGeneratorBySessionId:
             {'header': 'SPPR TYPE KEY', 'data_func': lambda data: data.sppr_type_key}
         ]
 
+        self.generate_xls_report_raw_rli()
+        self.generate_xls_report_targets()
+
     def create_directory(self):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
@@ -859,8 +862,6 @@ class XLSReportGeneratorBySessionId:
 
 
 report_generator = XLSReportGeneratorBySessionId(session_id=1)
-report_generator.generate_xls_report_raw_rli()
-report_generator.generate_xls_report_targets()
 
 # # Проверка работы методов
 #
